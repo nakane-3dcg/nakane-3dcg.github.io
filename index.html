@@ -1,1 +1,114 @@
-<h1>テストページです</h1>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="utf-8" />
+    <title>NAK WebAR Prototype</title>
+    
+    <!-- 1. WebARエンジン（A-Frame と MindAR）の読み込み -->
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    
+    <!-- 2. アニメーション制御用ライブラリ（aframe-extras） -->
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
+
+    <style>
+      /* 画面下部のボタン用スタイル */
+      #NAK_UI_Container {
+        position: absolute;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+        display: none; /* 初期は非表示。マーカーを認識したら表示します */
+      }
+      .nak-button {
+        padding: 15px 30px;
+        font-size: 18px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        cursor: pointer;
+      }
+      .nak-button:active {
+        background-color: #0056b3;
+      }
+    </style>
+
+    <!-- アニメーションとUIを制御するスクリプト（A-Frameコンポーネントとして登録） -->
+    <script>
+      AFRAME.registerComponent('ar-controller', {
+        init: function () {
+          const targetEntity = document.querySelector('#NAK_Target');
+          const modelEntity = document.querySelector('#NAK_Yatu');
+          const uiContainer = document.querySelector('#NAK_UI_Container');
+          const actionBtn = document.querySelector('#NAK_ActionButton');
+
+          // 【重要】Blender内で設定されているアニメーション（クリップ）名に書き換えてください。
+          const CLIP_ON = "アニメーション 1";     // 登場時のアニメ
+          const CLIP_IDLE = "アニメーション 2";   // 待機時のアニメ
+          const CLIP_ACTION = "アニメーション 3"; // ボタン時のアニメ
+
+          if (!targetEntity || !modelEntity) return; // エラー回避
+
+          // マーカーを認識した時の処理
+          targetEntity.addEventListener("targetFound", event => {
+            console.log("マーカー認識！");
+            uiContainer.style.display = "block"; // ボタンを表示
+            
+            // 1. 登場アニメーションを1回だけ再生
+            modelEntity.setAttribute("animation-mixer", `clip: ${CLIP_ON}; loop: once; clampWhenFinished: true;`);
+          });
+
+          // マーカーを見失った時の処理
+          targetEntity.addEventListener("targetLost", event => {
+            console.log("マーカー消失");
+            uiContainer.style.display = "none"; // ボタンを隠す
+            modelEntity.removeAttribute("animation-mixer"); // アニメーションをリセット
+          });
+
+          // アニメーションが1回終わるたびに呼ばれるイベント
+          modelEntity.addEventListener('animation-finished', function () {
+            const mixer = modelEntity.getAttribute("animation-mixer");
+            if (!mixer) return;
+            const currentClip = mixer.clip;
+            
+            // 登場、またはアクションが終わったら、待機ループに切り替える
+            if (currentClip === CLIP_ON || currentClip === CLIP_ACTION) {
+              // 0.2秒かけて滑らかに待機アニメに移行（クロスフェード）
+              modelEntity.setAttribute("animation-mixer", `clip: ${CLIP_IDLE}; loop: repeat; crossFadeDuration: 0.2;`);
+            }
+          });
+
+          // ボタンを押した時の処理
+          actionBtn.addEventListener("click", () => {
+            // 3. アクションアニメーションを1回だけ再生
+            modelEntity.setAttribute("animation-mixer", `clip: ${CLIP_ACTION}; loop: once; crossFadeDuration: 0.2;`);
+          });
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <!-- UI部分 -->
+    <div id="NAK_UI_Container">
+      <button id="NAK_ActionButton" class="nak-button">アクション！</button>
+    </div>
+
+    <!-- ARシーン部分 (ar-controller コンポーネントを適用) -->
+    <a-scene ar-controller mindar-image="imageTargetSrc: ./targets.mind;" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+      <a-assets>
+        <a-asset-item id="NAK_Model_Yatu" src="./CHR_yatu00.glb"></a-asset-item>
+      </a-assets>
+
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+      <!-- マーカーに追従するターゲット -->
+      <a-entity id="NAK_Target" mindar-image-target="targetIndex: 0">
+        <!-- 3Dモデル本体 -->
+        <a-gltf-model id="NAK_Yatu" rotation="0 0 0" position="0 0 0" scale="0.5 0.5 0.5" src="#NAK_Model_Yatu"></a-gltf-model>
+      </a-entity>
+    </a-scene>
+  </body>
+</html>
